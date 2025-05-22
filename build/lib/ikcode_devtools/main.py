@@ -19,12 +19,13 @@ from PyQt5.QtWidgets import (QMainWindow, QApplication, QPushButton,
                              QScrollArea)
 from PyQt5.QtGui import QIcon, QFont, QPixmap
 from PyQt5.QtCore import Qt
+import ikcode_devtools.version as version
 
 
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("IKcode Devtools GUI -- v1.8.0")
+        self.setWindowTitle(f"IKcode Devtools GUI -- v{version.__version__}")
         self.setGeometry(100, 100, 800, 800)
         self.setWindowIcon(QIcon("ikcode.png"))
         self.setStyleSheet("background-color: #1a7689;")

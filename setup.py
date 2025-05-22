@@ -1,8 +1,9 @@
 from setuptools import setup, find_packages
+from ikcode_devtools.version import __version__
 
 setup(
     name='ikcode-devtools',
-    version='1.8.6',
+    version=__version__,
     description='IKcode Devtools is a collection of tools for developers, including a code formatter, linter, and more.',
     author='IKcode',
     author_email='ikcode.offical@gmail.com',
