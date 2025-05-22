@@ -20,6 +20,13 @@ from PyQt5.QtWidgets import (QMainWindow, QApplication, QPushButton,
 from PyQt5.QtGui import QIcon, QFont, QPixmap
 from PyQt5.QtCore import Qt
 import ikcode_devtools.version as version
+print(" ")
+print("IKcode Devtools QUI")
+print(" ")
+print("Server log: ")
+
+current_dir = os.path.dirname(os.path.abspath(__file__))
+image_path = os.path.join(current_dir, "ikcode.png")
 
 
 class MainWindow(QMainWindow):
@@ -27,7 +34,7 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.setWindowTitle(f"IKcode Devtools GUI -- v{version.__version__}")
         self.setGeometry(100, 100, 800, 800)
-        self.setWindowIcon(QIcon("ikcode.png"))
+        self.setWindowIcon(QIcon(image_path))
         self.setStyleSheet("background-color: #1a7689;")
 
         self.checkbox = QCheckBox("Connect to terminal", self)
@@ -39,7 +46,7 @@ class MainWindow(QMainWindow):
 
         self.button_group = QButtonGroup(self)
 
-        label = QLabel("IKcode GUI", self)
+        label = QLabel("IKcode Devtools GUI", self)
         label.setFont(QFont("Veranda", 18, QFont.Bold))
         label.setGeometry(0, 0, 500, 100)
         label.setStyleSheet("color: white; background-color: #1a7689; border: 2px solid #ffcc00;")
@@ -50,12 +57,12 @@ class MainWindow(QMainWindow):
         self.rlabel.setStyleSheet("color: white; background-color: #1a7689; font-size:20px; font-family: Veranda;")
 
         self.tlabel = QLabel("Connect to your \n IKcode account:", self)
-        self.tlabel.setGeometry(600, 50, 200, 50)
+        self.tlabel.setGeometry(640, 50, 220, 50)  # moved further right
         self.tlabel.setStyleSheet("color: white; background-color: #1a7689; font-size:16px; font-family: Veranda;")
         self.textbox = QLineEdit(self)
-        self.textbox.setGeometry(600, 100, 150, 30)
+        self.textbox.setGeometry(640, 100, 150, 30)  # moved further right, aligned under tlabel
         self.textbutton = QPushButton("Connect", self)
-        self.textbutton.setGeometry(600, 140, 150, 30)
+        self.textbutton.setGeometry(640, 140, 150, 30)  # aligned directly under textbox and tlabel
 
         # Existing CheckInfo button
         self.cbutton = QPushButton("View CheckInfo", self)
@@ -63,11 +70,11 @@ class MainWindow(QMainWindow):
 
         self.initUI()
 
-        pixmap = QPixmap("ikcode.png")
+        pixmap = QPixmap(image_path)
         picture_label = QLabel(self)
-        scaled_pixmap = pixmap.scaled(100, 100, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+        scaled_pixmap = pixmap.scaled(100, 110, Qt.KeepAspectRatio, Qt.SmoothTransformation)
         picture_label.setPixmap(scaled_pixmap)
-        picture_label.setGeometry(500, 0, 100, 100)
+        picture_label.setGeometry(500, 0, 110, 100)
         picture_label.setAlignment(Qt.AlignCenter)
 
     def initUI(self):
@@ -699,7 +706,8 @@ Notes:
     else:
         print("Unrecognized help topic. Try Help(), Help(CheckInfo), Help(runGUI), or Help(setVersion).")
 
-VERSIONS_FILE = "versions.json"
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+VERSIONS_FILE = os.path.join(BASE_DIR, "versions.json")
 
 def load_versions():
     if os.path.exists(VERSIONS_FILE):
@@ -723,6 +731,7 @@ def getVersion(func):
     versions["ready_to_save"][func.__name__] = source
     save_versions(versions)
     return wrapper
+
 
 class VersionManagerDialog(QDialog):
     def __init__(self, parent=None):
@@ -985,7 +994,9 @@ class VersionManagerDialog(QDialog):
         self.populate_backup_codes()
 
 
-
+@getVersion
+def test():
+    print("TEST")
 
 def runGUI():
     app = QApplication(sys.argv)
