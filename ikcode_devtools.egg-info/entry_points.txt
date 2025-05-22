@@ -1,0 +1,2 @@
+[console_scripts]
+ikcode-devtools = ikcode_devtools.main:runGUI
