@@ -1,9 +1,7 @@
 
-IKcode GUI terminal connector
 
 
-
-IKcode GTC is used to connect your Python terminal to IKcode’s database, allowing file exchange and much more.
+IKcode Dvtools is used to connect your Python terminal to IKcode’s database, allowing file exchange and much more.
 1. Install and Setup IKcode GTC
 
 ⚠️ It is recommended to create a virtual environment before installing packages.
@@ -32,42 +30,44 @@ Install the Package
 
 Open the terminal in your project folder (Ctrl + Shift + ` in VSCode) and run:
 
-pip install ikcode_gtconnect
+pip install ikcode-devtools
 
 Keep it Updated
 
 The package may update frequently. To ensure full functionality, run this command daily or before each use:
 
-pip install --upgrade ikcode_gtconnect
+pip install --upgrade ikcode-devtools
 
 2. Use and Import the Package
 Run GUI Directly from Terminal
 
 Run this command in your terminal to open the GUI directly:
 
-ikcode-gtconnect
+ikcode-devtools
 
 Import in Python (Recommended)
 
 Open your Python file and import the package:
 
-import ikcode_gtconnect
+import ikcode_devtools # Make sure to use an underscore(_)
 
 Or import specific methods:
 
-from ikcode_gtconnect import runGUI, CheckInfo
+from ikcode_devtools import runGUI, CheckInfo
 
-Available Methods (as of v1.7.1)
+Available Methods (as of v1.8)
 
     runGUI()
     CheckInfo (decorator)
+    Help()
+    getVersion
 
 3. How to Use the Methods
 runGUI()
 
 To launch the GUI interface, import and call this function:
 
-from ikcode_gtconnect import runGUI
+from ikcode_devtools import runGUI
 runGUI()
 
 CheckInfo()
@@ -76,13 +76,46 @@ This is a decorator that checks detailed info about any Python function it decor
 
 Usage:
 
-from ikcode_gtconnect import CheckInfo
+from ikcode_devtools import CheckInfo
 
 @CheckInfo
 def my_function():
     # your code here
 
 Place @CheckInfo immediately above the function you want to analyze.
+Help()
+
+This is a function that lets you get help directly in the terminal when you run it
+
+Usage:
+
+from ikcode_devtools import Help
+print(Help()) # Print general help
+print(Help(runGUI)) # Print help on runGUI()
+print(Help(CheckInfo)) # Print help on CheckInfo
+print(Help(gui) # Print help on the GUI
+print(Help(getVersion) # Print help on getVersion
+
+How to Use getVersion to Restore Saved Code
+
+The getVersion function allows you to restore a previous version of your code that was saved using saveVersion. This is perfect for rolling back to earlier states if something breaks or if you want to review older code.
+Restoring a Version
+
+To restore a version:
+
+    Click the “Get Version” or “Load Version” button in your application.
+    A list of saved versions will appear, often labeled by date/time or version name.
+    Select the version you want to restore.
+    The current code will be replaced with the contents of the selected version.
+
+Important: Restoring a version will overwrite your current code. Make sure to save the current state with saveVersion before restoring another version.
+When to Use getVersion
+
+    After testing changes that didn't work as expected.
+    To compare current code with a previous version.
+    When you've accidentally removed important logic and need to recover it.
+
+Pro Tip: Use saveVersion frequently, and getVersion becomes your time machine for development!
 4. Help Manual & Features
 
 Welcome to the IKcode GUI Terminal Connector! This tool lets you connect your GUI to a terminal session, manage server logging preferences, and analyze Python functions with CheckInfo.
@@ -115,5 +148,8 @@ CheckInfo Feature
 
     @CheckInfo analyzes a function's code, gathering details such as variable names, imports, classes, loops, and more.
     Access the info via function._checkinfo_instance.get_info() or the View CheckInfo button in the GUI.
+    Remember to enable and connect the GUI before using @CheckInfo for full functionality.
+
+ GUI.
     Remember to enable and connect the GUI before using @CheckInfo for full functionality.
 
