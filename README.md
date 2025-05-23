@@ -18,7 +18,7 @@ Using Terminal (any OS)
 
 Open your terminal (BASH, PowerShell, Command Prompt) and run:
 
-python -m venv .venv
+    python -m venv .venv
 
 Then activate the environment:
 
@@ -30,30 +30,30 @@ Install the Package
 
 Open the terminal in your project folder (Ctrl + Shift + ` in VSCode) and run:
 
-pip install ikcode-devtools
+    pip install ikcode-devtools
 
 Keep it Updated
 
 The package may update frequently. To ensure full functionality, run this command daily or before each use:
 
-pip install --upgrade ikcode-devtools
+    pip install --upgrade ikcode-devtools
 
 2. Use and Import the Package
 Run GUI Directly from Terminal
 
 Run this command in your terminal to open the GUI directly:
 
-ikcode-devtools
+    ikcode-devtools
 
 Import in Python (Recommended)
 
 Open your Python file and import the package:
 
-import ikcode_devtools # Make sure to use an underscore(_)
+    import ikcode_devtools # Make sure to use an underscore(_)
 
 Or import specific methods:
 
-from ikcode_devtools import runGUI, CheckInfo
+    from ikcode_devtools import runGUI, CheckInfo
 
 Available Methods (as of v1.8)
 
@@ -67,8 +67,8 @@ runGUI()
 
 To launch the GUI interface, import and call this function:
 
-from ikcode_devtools import runGUI
-runGUI()
+    from ikcode_devtools import runGUI
+    runGUI()
 
 CheckInfo()
 
@@ -76,25 +76,27 @@ This is a decorator that checks detailed info about any Python function it decor
 
 Usage:
 
-from ikcode_devtools import CheckInfo
-
-@CheckInfo
-def my_function():
-    # your code here
+    from ikcode_devtools import CheckInfo
+    
+    @CheckInfo
+    def my_function():
+        # your code here
 
 Place @CheckInfo immediately above the function you want to analyze.
+
 Help()
 
 This is a function that lets you get help directly in the terminal when you run it
 
 Usage:
 
-from ikcode_devtools import Help
-print(Help()) # Print general help
-print(Help(runGUI)) # Print help on runGUI()
-print(Help(CheckInfo)) # Print help on CheckInfo
-print(Help(gui) # Print help on the GUI
-print(Help(getVersion) # Print help on getVersion
+    from ikcode_devtools import Help
+    print(Help()) # Print general help
+    print(Help(runGUI)) # Print help on runGUI()
+    print(Help(CheckInfo)) # Print help on CheckInfo
+    print(Help(gui) # Print help on the GUI
+    print(Help(getVersion) # Print help on getVersion
+    print(Help(getInspect) # Print help on getInspect
 
 How to Use getVersion to Restore Saved Code
 
@@ -117,6 +119,46 @@ When to Use getVersion
 
 Pro Tip: Use saveVersion frequently, and getVersion becomes your time machine for development!
 4. Help Manual & Features
+
+
+Function Inspection with @getInspect
+
+The @getInspect decorator analyzes your Python functions to provide detailed insights about their execution, structure, and complexity.
+Importing
+
+    from ikcode_devtools import getInspect
+  
+
+Usage
+
+Decorate any function you want to inspect with @getInspect. For example:
+
+    @getInspect
+    def my_function(x):
+        total = 0
+        for i in range(x):
+            total += i
+        return total
+    my_function() # Will only work if the function is called
+  
+
+Important:
+
+You must call the decorated function at least once for inspection data to be generated and stored. The inspection runs when the function executes.
+
+    result = my_function(10)
+  
+
+Viewing Inspection Results
+
+Inspection results are stored in the global dictionary inspection_results keyed by function name. You can directly view it in your python file:
+
+    from ikcode_devtools import inspection_results
+    
+    print(inspection_results.get("my_function"))
+  
+
+OR, In the GUI, clicking the "Run Inspection" button will display a summary of all inspected functions and their analysis data.
 
 Welcome to the IKcode GUI Terminal Connector! This tool lets you connect your GUI to a terminal session, manage server logging preferences, and analyze Python functions with CheckInfo.
 Enabling the GUI
