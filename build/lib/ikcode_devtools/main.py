@@ -6,6 +6,9 @@ import inspect
 import subprocess
 import tempfile
 import os
+import traceback
+import inspect as pyinspect
+from collections import defaultdict
 from ast import Name
 from functools import wraps, partial
 import json
@@ -20,6 +23,16 @@ from PyQt5.QtWidgets import (QMainWindow, QApplication, QPushButton,
 from PyQt5.QtGui import QIcon, QFont, QPixmap
 from PyQt5.QtCore import Qt
 import ikcode_devtools.version as version
+from ikcode_devtools.inspector import inspection_results, getInspect
+import warnings
+
+print(" ")
+print("IKcode Devtools QUI")
+print(" ")
+print("Server log: ")
+
+current_dir = os.path.dirname(os.path.abspath(__file__))
+image_path = os.path.join(current_dir, "ikcode.png")
 
 
 class MainWindow(QMainWindow):
@@ -27,7 +40,7 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.setWindowTitle(f"IKcode Devtools GUI -- v{version.__version__}")
         self.setGeometry(100, 100, 800, 800)
-        self.setWindowIcon(QIcon("ikcode.png"))
+        self.setWindowIcon(QIcon(image_path))
         self.setStyleSheet("background-color: #1a7689;")
 
         self.checkbox = QCheckBox("Connect to terminal", self)
@@ -39,7 +52,7 @@ class MainWindow(QMainWindow):
 
         self.button_group = QButtonGroup(self)
 
-        label = QLabel("IKcode GUI", self)
+        label = QLabel("IKcode Devtools GUI", self)
         label.setFont(QFont("Veranda", 18, QFont.Bold))
         label.setGeometry(0, 0, 500, 100)
         label.setStyleSheet("color: white; background-color: #1a7689; border: 2px solid #ffcc00;")
@@ -50,24 +63,26 @@ class MainWindow(QMainWindow):
         self.rlabel.setStyleSheet("color: white; background-color: #1a7689; font-size:20px; font-family: Veranda;")
 
         self.tlabel = QLabel("Connect to your \n IKcode account:", self)
-        self.tlabel.setGeometry(600, 50, 200, 50)
+        self.tlabel.setGeometry(640, 50, 220, 50)  # moved further right
         self.tlabel.setStyleSheet("color: white; background-color: #1a7689; font-size:16px; font-family: Veranda;")
         self.textbox = QLineEdit(self)
-        self.textbox.setGeometry(600, 100, 150, 30)
+        self.textbox.setGeometry(640, 100, 150, 30)  # moved further right, aligned under tlabel
         self.textbutton = QPushButton("Connect", self)
-        self.textbutton.setGeometry(600, 140, 150, 30)
+        self.textbutton.setGeometry(640, 140, 150, 30)  # aligned directly under textbox and tlabel
 
         # Existing CheckInfo button
         self.cbutton = QPushButton("View CheckInfo", self)
         self.cbutton.setStyleSheet("border: 2px solid #ffcc00; background-color: #155e6e; color: white; font-size: 20px; font-family: Veranda;")
 
+        
+
         self.initUI()
 
-        pixmap = QPixmap("ikcode.png")
+        pixmap = QPixmap(image_path)
         picture_label = QLabel(self)
-        scaled_pixmap = pixmap.scaled(100, 100, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+        scaled_pixmap = pixmap.scaled(100, 110, Qt.KeepAspectRatio, Qt.SmoothTransformation)
         picture_label.setPixmap(scaled_pixmap)
-        picture_label.setGeometry(500, 0, 100, 100)
+        picture_label.setGeometry(500, 0, 110, 100)
         picture_label.setAlignment(Qt.AlignCenter)
 
     def initUI(self):
@@ -77,14 +92,16 @@ class MainWindow(QMainWindow):
         self.button.setStyleSheet("border: 2px solid #ffcc00; background-color: #155e6e; color: white; font-size: 16px; font-family: Veranda;")
         self.button.clicked.connect(self.on_click)
 
+
         self.buttons_container = QWidget(self)
         container_width = 600
-        container_height = 110  # Increased height to safely fit buttons + spacing
+        container_height = 220  # Increased height to safely fit buttons + spacing
         container_x = (self.width() - container_width) // 2
         container_y = 370  # Lowered from 330 to 370
         self.buttons_container.setGeometry(container_x, container_y, container_width, container_height)
         self.buttons_container.setStyleSheet("background-color: #135e6c; border-radius: 12px;")
 
+        
         buttons_layout = QHBoxLayout()
         buttons_layout.setContentsMargins(16, 12, 16, 12)  # generous padding inside container
         buttons_layout.setSpacing(20)
@@ -109,6 +126,9 @@ class MainWindow(QMainWindow):
             button.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
             return button
 
+        
+        
+
         self.info_button = styled_button("View\nFile Info")
         self.info_button.clicked.connect(self.view_file_info)
 
@@ -122,9 +142,14 @@ class MainWindow(QMainWindow):
         self.cbutton.setMaximumWidth(160)
         self.cbutton.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
 
+        self.inspect_button = styled_button("Run\nInspection")
+        self.inspect_button.clicked.connect(self.inspect_button_clicked)
+        buttons_layout.addWidget(self.inspect_button)
+
         buttons_layout.addWidget(self.info_button)
         buttons_layout.addWidget(self.manage_versions_btn)
         buttons_layout.addWidget(self.cbutton)
+        
 
         self.buttons_container.setLayout(buttons_layout)
 
@@ -470,6 +495,56 @@ class MainWindow(QMainWindow):
         # Show info in message box (only CheckInfo data)
         QMessageBox.information(self, "CheckInfo", output)
 
+    def inspect_button_clicked(self):
+
+        gui_enabled = self.button.text() == "Disable GUI"
+        terminal_connected = self.checkbox.isChecked()
+        if not (gui_enabled and terminal_connected):
+            QMessageBox.warning(self, "Error", "GUI must be enabled and terminal connected to run an inspection")
+            return
+               
+        from ikcode_devtools import inspector
+        inspection_data = inspector.inspection_results
+
+        if self.log:
+            print("INSPECTION RESULTS:", inspection_data)  # Debug print
+
+        if not inspection_data:
+            QMessageBox.information(self, "No Data", "No inspection data found.")
+            return
+
+        html = "<h3>Inspection Results:</h3><ul>"
+        for fname, results in inspection_data.items():
+            html += f"<li><b>{fname}</b>:<ul>"
+            for key, val in results.items():
+                html += f"<li>{key}: {val}</li>"
+            html += "</ul></li>"
+        html += "</ul>"
+
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Function Inspection")
+        dialog.resize(600, 400)
+
+        layout = QVBoxLayout()
+        label = QLabel()
+        label.setTextFormat(Qt.RichText)
+        label.setText(html)
+        label.setWordWrap(True)
+
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setWidget(label)
+
+        layout.addWidget(scroll)
+
+        close = QPushButton("Close")
+        close.clicked.connect(dialog.accept)
+        layout.addWidget(close)
+
+        dialog.setLayout(layout)
+        dialog.exec_()
+
+
 
 
 
@@ -654,9 +729,29 @@ Usage:
 
 Methods:
     get_info() — returns a dictionary of code analysis
+"""
 
-Note:
-    CheckInfo only works on user-defined functions.
+    inspection_data_help = """
+Inspection Data Generation - Important Note
+
+The inspection data generated by the CheckInfo decorator (or similar decorators)
+is created *only when the decorated function is called* during program execution.
+
+Simply decorating a function does NOT generate or store inspection data.
+
+This means:
+
+  • You must call the decorated function at least once for the inspection data
+    to be collected and available.
+
+  • If you try to view inspection results before calling the function,
+    no data will be found and you may see messages like
+    "No inspection data found."
+
+To fix this:
+
+  1. Call the decorated function somewhere in your code or interactively.
+  2. Then run the inspection viewer or GUI to see the collected data.
 """
 
     setversion_help = """
@@ -688,18 +783,28 @@ Notes:
     # Dispatcher logic
     if topic is None:
         print(general_help)
-    elif isinstance(topic, str) and topic.lower() == "gui":
-        print(gui_help)
-    elif topic.__name__ == "runGUI":
-        print(gui_help)
-    elif topic.__name__ == "CheckInfo":
-        print(checkinfo_help)
-    elif topic.__name__ == "getVersion":
-        print(setversion_help)
+    elif isinstance(topic, str):
+        t = topic.lower()
+        if t == "gui":
+            print(gui_help)
+        elif t in ("inspection_data", "inspection"):
+            print(inspection_data_help)
+        else:
+            print("Unrecognized help topic. Try Help(), Help(CheckInfo), Help(runGUI), Help('inspection_data'), or Help(setVersion).")
+    elif hasattr(topic, "__name__"):
+        if topic.__name__ == "runGUI":
+            print(gui_help)
+        elif topic.__name__ == "CheckInfo":
+            print(checkinfo_help)
+        elif topic.__name__ == "getVersion":
+            print(setversion_help)
+        else:
+            print("Unrecognized help topic. Try Help(), Help(CheckInfo), Help(runGUI), Help('inspection_data'), or Help(setVersion).")
     else:
-        print("Unrecognized help topic. Try Help(), Help(CheckInfo), Help(runGUI), or Help(setVersion).")
+        print("Unrecognized help topic. Try Help(), Help(CheckInfo), Help(runGUI), Help('inspection_data'), or Help(setVersion).")
 
-VERSIONS_FILE = "versions.json"
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+VERSIONS_FILE = os.path.join(BASE_DIR, "versions.json")
 
 def load_versions():
     if os.path.exists(VERSIONS_FILE):
@@ -723,6 +828,7 @@ def getVersion(func):
     versions["ready_to_save"][func.__name__] = source
     save_versions(versions)
     return wrapper
+
 
 class VersionManagerDialog(QDialog):
     def __init__(self, parent=None):
@@ -984,8 +1090,10 @@ class VersionManagerDialog(QDialog):
         self.populate_saved_codes()
         self.populate_backup_codes()
 
-
-
+@getInspect
+def test():
+    print("e")
+test()
 
 def runGUI():
     app = QApplication(sys.argv)
