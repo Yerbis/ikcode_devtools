@@ -1,7 +1,5 @@
 {
-    "ready_to_save": {
-        "test": "@getVersion\ndef test():\n    print(\"TEST\")\n"
-    },
+    "ready_to_save": {},
     "saved_codes": {},
     "backup_codes": {}
 }

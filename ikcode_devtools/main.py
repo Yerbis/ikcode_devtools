@@ -845,26 +845,30 @@ class CheckInfo:
         return self.func(*args, **kwargs)
 
     def _analyze_code(self):
-        source = inspect.getsource(self.func)
-        tree = ast.parse(source)
+        try:
+            source = inspect.getsource(self.func)
+            source = textwrap.dedent(source)  # ← This is necessary
+            tree = ast.parse(source)
 
-        analyzer = CodeAnalyzer()
+            analyzer = CodeAnalyzer()
+            for node in tree.body:
+                if isinstance(node, ast.FunctionDef):
+                    analyzer.visit(node)
+                    break
 
-        # The parsed tree contains only one node: the function we decorated
-        for node in tree.body:
-            if isinstance(node, ast.FunctionDef):
-                analyzer.visit(node)
-                break
+            self.full_info = {
+                "Function Names": analyzer.function_names,
+                "Variable Names": analyzer.variable_names,
+                "Imports": analyzer.imports,
+                "Classes": analyzer.classes,
+                "Loops": analyzer.loops,
+                "Conditionals": analyzer.conditionals,
+                "Comments": analyzer.comments
+            }
+        except Exception as e:
+            print("Error during code analysis:", e)
+            self.full_info = {}
 
-        self.full_info = {
-            "Function Names": analyzer.function_names,
-            "Variable Names": analyzer.variable_names,
-            "Imports": analyzer.imports,
-            "Classes": analyzer.classes,
-            "Loops": analyzer.loops,
-            "Conditionals": analyzer.conditionals,
-            "Comments": analyzer.comments
-        }
 
     def get_info(self):
         return self.full_info
