@@ -19,11 +19,12 @@ from PyQt5.QtWidgets import (QMainWindow, QApplication, QPushButton,
                              QVBoxLayout, QTextEdit, QTabWidget, QWidget, QListWidget,
                              QListWidgetItem, QMessageBox, QHBoxLayout, QSpacerItem, QSizePolicy,
                              QFileDialog, QGridLayout, QInputDialog,
-                             QScrollArea)
-from PyQt5.QtGui import QIcon, QFont, QPixmap
+                             QScrollArea, QMenu)
+from PyQt5.QtGui import QIcon, QFont, QPixmap, QCursor
 from PyQt5.QtCore import Qt
 import ikcode_devtools.version as version
 from ikcode_devtools.inspector import inspection_results, getInspect
+from ikcode_devtools.gtest import gTest, generate_test_code
 import warnings
 
 print(" ")
@@ -95,45 +96,47 @@ class MainWindow(QMainWindow):
 
         self.buttons_container = QWidget(self)
         container_width = 600
-        container_height = 220  # Increased height to safely fit buttons + spacing
+        container_height = 350  # slightly taller to accommodate 2 rows
         container_x = (self.width() - container_width) // 2
-        container_y = 370  # Lowered from 330 to 370
+        container_y = 400
         self.buttons_container.setGeometry(container_x, container_y, container_width, container_height)
         self.buttons_container.setStyleSheet("background-color: #135e6c; border-radius: 12px;")
 
-        
-        buttons_layout = QHBoxLayout()
-        buttons_layout.setContentsMargins(16, 12, 16, 12)  # generous padding inside container
-        buttons_layout.setSpacing(20)
+        # Outer vertical layout for two rows of buttons
+        outer_layout = QVBoxLayout()
+        outer_layout.setContentsMargins(16, 12, 16, 12)
+        outer_layout.setSpacing(12)
 
-        # Smaller button style
         button_style = (
             "border: 2px solid #ffcc00;"
             "background-color: #155e6e;"
             "color: white;"
-            "font-size: 13px;"  # slightly smaller
+            "font-size: 13px;"
             "font-family: Verdana;"
-            "padding: 6px 10px;"  # smaller padding
+            "padding: 6px 10px;"
             "border-radius: 7px;"
         )
 
         def styled_button(text):
             button = QPushButton(text)
             button.setStyleSheet(button_style)
-            button.setMinimumHeight(50)  # smaller height
+            button.setMinimumHeight(50)
             button.setMinimumWidth(120)
             button.setMaximumWidth(160)
             button.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
             return button
 
-        
-        
+        # Top row: File Info, Versions, CheckInfo
+        top_row = QHBoxLayout()
+        top_row.setSpacing(20)
 
         self.info_button = styled_button("View\nFile Info")
         self.info_button.clicked.connect(self.view_file_info)
+        top_row.addWidget(self.info_button)
 
         self.manage_versions_btn = styled_button("Manage\nSaved Versions")
         self.manage_versions_btn.clicked.connect(self.open_version_manager)
+        top_row.addWidget(self.manage_versions_btn)
 
         self.cbutton.setText("View\nCheckInfo")
         self.cbutton.setStyleSheet(button_style)
@@ -141,17 +144,26 @@ class MainWindow(QMainWindow):
         self.cbutton.setMinimumWidth(120)
         self.cbutton.setMaximumWidth(160)
         self.cbutton.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        top_row.addWidget(self.cbutton)
+
+        # Bottom row: Run Inspection + Generate Tests
+        bottom_row = QHBoxLayout()
+        bottom_row.setSpacing(20)
 
         self.inspect_button = styled_button("Run\nInspection")
         self.inspect_button.clicked.connect(self.inspect_button_clicked)
-        buttons_layout.addWidget(self.inspect_button)
+        bottom_row.addWidget(self.inspect_button)
 
-        buttons_layout.addWidget(self.info_button)
-        buttons_layout.addWidget(self.manage_versions_btn)
-        buttons_layout.addWidget(self.cbutton)
-        
+        self.generate_tests_button = styled_button("Generate\nTests")
+        self.generate_tests_button.clicked.connect(self.generate_tests_button_clicked)  # Don't forget to connect!
+        bottom_row.addWidget(self.generate_tests_button)
 
-        self.buttons_container.setLayout(buttons_layout)
+        # Combine into outer layout
+        outer_layout.addLayout(top_row)
+        outer_layout.addLayout(bottom_row)
+        self.buttons_container.setLayout(outer_layout)
+
+
 
         # Help button
         self.help_button = QPushButton("Help", self)
@@ -194,7 +206,7 @@ class MainWindow(QMainWindow):
     def resizeEvent(self, event):
         super().resizeEvent(event)
         container_width = 600
-        container_height = 95
+        container_height = 150
         container_x = (self.width() - container_width) // 2
         container_y = 330
         self.buttons_container.setGeometry(container_x, container_y, container_width, container_height)
@@ -545,8 +557,218 @@ class MainWindow(QMainWindow):
         dialog.exec_()
 
 
+    def generate_tests_button_clicked(self):
+        from ikcode_devtools.gtest import gtest_registry
+
+        gui_enabled = self.button.text() == "Disable GUI"
+        terminal_connected = self.checkbox.isChecked()
+        if not (gui_enabled and terminal_connected):
+            QMessageBox.warning(self, "Error", "GUI must be enabled and terminal connected to generate tests")
+            return
+
+        functions = list(gtest_registry.keys())
+        
+        
+        pick_dialog = QDialog(self)
+        pick_dialog.setWindowTitle("Select Function to Generate Test")
+        pick_dialog.resize(400, 350)
+
+        layout = QVBoxLayout()
+        layout.addWidget(QLabel("Filter functions:"))
+
+        search_bar = QLineEdit()
+        layout.addWidget(search_bar)
+
+        list_widget = QListWidget()
+        list_widget.addItems(functions)
+        layout.addWidget(list_widget)
+       
+        if not functions:
+            error_label = QLabel("No @gTest decorated functions found.")
+            error_label.setStyleSheet("color: #901418; font-weight: bold;")
+            layout.addWidget(error_label)
+
+            close_btn = QPushButton("Close")
+            close_btn.clicked.connect(pick_dialog.accept)
+            layout.addWidget(close_btn)
+
+            pick_dialog.setLayout(layout)
+            pick_dialog.exec_()
+            return
+        
+
+        ok_btn = QPushButton("Next")
+        ok_btn.setEnabled(False)
+        cancel_btn = QPushButton("Cancel")
+
+        btn_layout = QVBoxLayout()
+        btn_layout.addWidget(ok_btn)
+        btn_layout.addWidget(cancel_btn)
+        layout.addLayout(btn_layout)
+
+        pick_dialog.setLayout(layout)
+
+        # Enable Next only if something is selected
+        list_widget.itemSelectionChanged.connect(
+            lambda: ok_btn.setEnabled(len(list_widget.selectedItems()) > 0)
+        )
+
+        # Filter function list when typing in search bar
+        def filter_functions(text):
+            text = text.lower()
+            list_widget.clear()
+            filtered = [f for f in functions if text in f.lower()]
+            list_widget.addItems(filtered)
+
+        search_bar.textChanged.connect(filter_functions)
+
+        def on_ok():
+            selected_items = list_widget.selectedItems()
+            if not selected_items:
+                return
+            func_name = selected_items[0].text()
+            pick_dialog.accept()  # Close the function picker
+
+            # ➕ Now show the test type selection dialog
+            test_types = [
+                "debug", "run", "exception", "print", "type_check",
+                "no_exception", "side_effect", "performance", "parametrized"
+            ]
+            test_type = self.show_test_type_dialog(func_name, test_types)
+
+            if test_type:
+                args = gtest_registry[func_name]["args"]  # pull args from registry
+                from ikcode_devtools.gtest import generate_test_code
+                test_code = generate_test_code(func_name, test_type, args)
+                self.show_test_code_dialog(func_name, test_code)
+
+        ok_btn.clicked.connect(on_ok)
+        cancel_btn.clicked.connect(pick_dialog.reject)
+
+        pick_dialog.exec_()
+
+        
+    def show_test_type_dialog(self, func_name, available_test_types):
+        dialog = QDialog(self)
+        dialog.setWindowTitle(f"Select Test Type for '{func_name}'")
+        dialog.resize(350, 300)
+
+        layout = QVBoxLayout()
+        layout.addWidget(QLabel("Filter test types:"))
+
+        search_bar = QLineEdit()
+        layout.addWidget(search_bar)
+
+        test_type_list = QListWidget()
+        test_type_list.addItems(available_test_types)
+        layout.addWidget(test_type_list)
+
+        generate_btn = QPushButton("Generate Test")
+        generate_btn.setEnabled(False)
+        cancel_btn = QPushButton("Cancel")
+
+        btn_layout = QVBoxLayout()
+        btn_layout.addWidget(generate_btn)
+        btn_layout.addWidget(cancel_btn)
+        layout.addLayout(btn_layout)
+
+        dialog.setLayout(layout)
+
+        # Enable Generate only if something is selected
+        test_type_list.itemSelectionChanged.connect(
+            lambda: generate_btn.setEnabled(len(test_type_list.selectedItems()) > 0)
+        )
+
+        # Filter the test type list on typing
+        def filter_test_types(text):
+            text = text.lower()
+            test_type_list.clear()
+            filtered = [t for t in available_test_types if text in t.lower()]
+            test_type_list.addItems(filtered)
+
+        search_bar.textChanged.connect(filter_test_types)
+
+        # ✅ Accept the dialog when Generate is clicked
+        def on_generate_clicked():
+            if test_type_list.selectedItems():
+                dialog.accept()
+
+        generate_btn.clicked.connect(on_generate_clicked)
+        cancel_btn.clicked.connect(dialog.reject)
+
+        if dialog.exec_() == QDialog.Accepted:
+            selected_items = test_type_list.selectedItems()
+            if selected_items:
+                return selected_items[0].text()
+        return None
 
 
+    def show_test_code_dialog(self, func_name, test_code):
+        dialog = QDialog(self)
+        dialog.setWindowTitle(f"Generated Test Code for '{func_name}'")
+        dialog.resize(700, 500)
+
+        layout = QVBoxLayout()
+
+        text_edit = QTextEdit()
+        text_edit.setPlainText(test_code)
+        text_edit.setReadOnly(False)  # Allow editing and copying
+        layout.addWidget(text_edit)
+
+        # ✅ Add helpful usage instructions
+        info_label = QLabel(
+            "<i>You can edit this test code to fit your specific logic.<br>"
+            "Then copy and paste it into your test files.</i>"
+        )
+        info_label.setStyleSheet("color: #ffcc00; padding-top: 4px;")
+        layout.addWidget(info_label)
+
+        close_button = QPushButton("Close")
+        close_button.clicked.connect(dialog.accept)
+        layout.addWidget(close_button)
+
+        dialog.setLayout(layout)
+        dialog.exec_()
+
+
+    def show_function_selection_dialog(self, func_names):
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Select Decorated Function")
+
+        layout = QVBoxLayout()
+        label = QLabel("Select the function to generate tests for:")
+        layout.addWidget(label)
+
+        button_group = QButtonGroup(dialog)
+
+        for func in func_names:
+            rb = QRadioButton(func)
+            button_group.addButton(rb)
+            layout.addWidget(rb)
+
+        # Default select first function
+        if button_group.buttons():
+            button_group.buttons()[0].setChecked(True)
+
+        btn_layout = QHBoxLayout()
+        ok_btn = QPushButton("OK")
+        cancel_btn = QPushButton("Cancel")
+        btn_layout.addWidget(ok_btn)
+        btn_layout.addWidget(cancel_btn)
+        layout.addLayout(btn_layout)
+
+        dialog.setLayout(layout)
+
+        ok_btn.clicked.connect(dialog.accept)
+        cancel_btn.clicked.connect(dialog.reject)
+
+        if dialog.exec_() == QDialog.Accepted:
+            for btn in button_group.buttons():
+                if btn.isChecked():
+                    return btn.text()
+        return None
+
+       
 
 full_info = {}
 
@@ -780,6 +1002,50 @@ Notes:
     - Calling setVersion updates internal version tracking, useful before running other methods.
 """
 
+    gtest_help = """
+gTest - Automatic Test Generator Help
+
+Purpose:
+    Automatically generate test code for your functions using the @gTest decorator.
+    You can use the GUI to choose a function and test type, then copy/paste or edit the generated code.
+
+Usage:
+
+    from ikcode_devtools import gTest
+
+    @gTest
+    def add(x, y):
+        return x + y
+
+    # Run the function at least once so gTest collects signature info:
+    add(1, 2)
+
+    # Then open the GUI:
+    from ikcode_devtools import runGUI
+    runGUI()
+
+    Inside the GUI:
+      1. Click the 'Generate Tests' button.
+      2. Choose your decorated function from the list.
+      3. Select a test type (e.g., debug, run, exception, print, type_check).
+      4. View and copy/edit the generated test code.
+
+Available Test Types:
+    - debug: Prints function call and result.
+    - run: Asserts a result equals a placeholder expected value.
+    - exception: Tests whether the function raises an exception.
+    - print: Prints the function call and output.
+    - type_check: Asserts the return type matches a placeholder type.
+    - ... more types can be added in your test generation logic.
+
+Notes:
+    - You must **call the decorated function at least once** before using 'Generate Tests' in the GUI.
+    - This ensures gTest collects the argument names and function metadata.
+    - The generated code is editable and meant as a starting point for real tests.
+
+"""
+
+
     # Dispatcher logic
     if topic is None:
         print(general_help)
@@ -798,6 +1064,8 @@ Notes:
             print(checkinfo_help)
         elif topic.__name__ == "getVersion":
             print(setversion_help)
+        elif topic.__name__ == "gTest":
+            print(gtest_help)
         else:
             print("Unrecognized help topic. Try Help(), Help(CheckInfo), Help(runGUI), Help('inspection_data'), or Help(setVersion).")
     else:
@@ -1090,10 +1358,6 @@ class VersionManagerDialog(QDialog):
         self.populate_saved_codes()
         self.populate_backup_codes()
 
-@getInspect
-def test():
-    print("e")
-test()
 
 def runGUI():
     app = QApplication(sys.argv)
