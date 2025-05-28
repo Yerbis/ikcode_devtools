@@ -6,6 +6,7 @@ ikcode_devtools/gtest.py
 ikcode_devtools/ikcode.png
 ikcode_devtools/inspector.py
 ikcode_devtools/main.py
+ikcode_devtools/playgrounds.py
 ikcode_devtools/version.py
 ikcode_devtools.egg-info/PKG-INFO
 ikcode_devtools.egg-info/SOURCES.txt

@@ -20,7 +20,7 @@ from PyQt5.QtWidgets import (QMainWindow, QApplication, QPushButton,
                              QListWidgetItem, QMessageBox, QHBoxLayout, QSpacerItem, QSizePolicy,
                              QFileDialog, QGridLayout, QInputDialog,
                              QScrollArea, QMenu)
-from PyQt5.QtGui import QIcon, QFont, QPixmap, QCursor
+from PyQt5.QtGui import QIcon, QFont, QPixmap
 from PyQt5.QtCore import Qt
 import ikcode_devtools.version as version
 from ikcode_devtools.inspector import inspection_results, getInspect
@@ -28,7 +28,7 @@ from ikcode_devtools.gtest import gTest, generate_test_code
 import warnings
 
 print(" ")
-print("IKcode Devtools QUI")
+print("IKcode Devtools GUI")
 print(" ")
 print("Server log: ")
 
@@ -126,7 +126,7 @@ class MainWindow(QMainWindow):
             button.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
             return button
 
-        # Top row: File Info, Versions, CheckInfo
+        
         top_row = QHBoxLayout()
         top_row.setSpacing(20)
 
@@ -146,7 +146,7 @@ class MainWindow(QMainWindow):
         self.cbutton.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         top_row.addWidget(self.cbutton)
 
-        # Bottom row: Run Inspection + Generate Tests
+        
         bottom_row = QHBoxLayout()
         bottom_row.setSpacing(20)
 
@@ -154,13 +154,25 @@ class MainWindow(QMainWindow):
         self.inspect_button.clicked.connect(self.inspect_button_clicked)
         bottom_row.addWidget(self.inspect_button)
 
+        self.pbutton = styled_button("Playgrounds")
+        self.pbutton.clicked.connect(self.playgrounds_button_clicked)
+        bottom_row.addWidget(self.pbutton)
+
         self.generate_tests_button = styled_button("Generate\nTests")
         self.generate_tests_button.clicked.connect(self.generate_tests_button_clicked)  # Don't forget to connect!
         bottom_row.addWidget(self.generate_tests_button)
 
+        third_row = QHBoxLayout()
+        third_row.setSpacing(20)
+
+        self.copy_button = styled_button("Clipboard\nHistory (Beta)")
+        self.copy_button.clicked.connect(self.clipboard_history_button_clicked)
+        third_row.addWidget(self.copy_button)
+
         # Combine into outer layout
         outer_layout.addLayout(top_row)
         outer_layout.addLayout(bottom_row)
+        outer_layout.addLayout(third_row)
         self.buttons_container.setLayout(outer_layout)
 
 
@@ -206,7 +218,7 @@ class MainWindow(QMainWindow):
     def resizeEvent(self, event):
         super().resizeEvent(event)
         container_width = 600
-        container_height = 150
+        container_height = 190
         container_x = (self.width() - container_width) // 2
         container_y = 330
         self.buttons_container.setGeometry(container_x, container_y, container_width, container_height)
@@ -262,10 +274,10 @@ class MainWindow(QMainWindow):
         print("\nServer log disabled")
 
     def help_button_clicked(self):
-        help_text = """
+        help_text = f"""
         <h2>IKcode Devtools GUI Help</h2>
 
-        <p><strong>Welcome to the IKcode Devtools GUI (v1.8.0)!</strong></p>
+        <p><strong>Welcome to the IKcode Devtools GUI (v{version.__version__})!</strong></p>
 
         <p>This application provides a graphical interface for interacting with IKcode's code analysis and version management tools.</p>
 
@@ -297,6 +309,20 @@ class MainWindow(QMainWindow):
         </code></pre>
 
         <p>Once saved, you can restore this code later using the <strong>getVersion</strong> button in the GUI.</p>
+        
+        <h3>Playgrounds</h3>
+        <ul>
+            <li>Playgrounds allow the user to test and evaluate different methods,</li>
+            <li>like Math expressions, JSONs, Date & Time, etc.</li>
+        </ul>
+
+        <h3>Clipboard History</h3>
+        <p>Copy any text from anywhere (Ctrl+C or right-click &gt; Copy)</p>
+        <p>Each new copied item appears at the top of this list.</p>
+        <p>The most recent 50 items are kept temporarily</p>
+        <p>This history clears when the app is closed.</p>
+        <p>Make sure to have the Clipboard History open before copying text.</p>
+        <p><strong>NOTICE:</strong> In Beta phase, UI may be unformatted & Bugs</p>
 
         <hr>
         <p>For more info, visit: <a href="https://ikgtc.pythonanywhere.com" style="color: blue;">https://ikgtc.pythonanywhere.com</a></p>
@@ -767,8 +793,305 @@ class MainWindow(QMainWindow):
                 if btn.isChecked():
                     return btn.text()
         return None
+    
+    def playgrounds_button_clicked(self):
+        from playgrounds import get_playground_types, APL
+        from PyQt5.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QListWidget, QPushButton, QInputDialog
 
-       
+        master_types = list(get_playground_types())  # master list WITHOUT + Add Playground
+        add_playground_label = APL
+
+        select_dialog = QDialog(self)
+        select_dialog.setWindowTitle("Select a Playground")
+        select_dialog.resize(400, 300)
+
+        layout = QVBoxLayout()
+        layout.addWidget(QLabel("Search playgrounds:"))
+        search_bar = QLineEdit()
+        layout.addWidget(search_bar)
+
+        type_list = QListWidget()
+        layout.addWidget(type_list)
+
+        next_btn = QPushButton("Next")
+        next_btn.setEnabled(False)
+        cancel_btn = QPushButton("Cancel")
+        btn_layout = QHBoxLayout()
+        btn_layout.addWidget(next_btn)
+        btn_layout.addWidget(cancel_btn)
+        layout.addLayout(btn_layout)
+
+        select_dialog.setLayout(layout)
+
+        def refresh_list(filtered_types):
+            type_list.clear()
+            filtered_types_with_add = filtered_types + [add_playground_label]
+            type_list.addItems(filtered_types_with_add)
+
+        def filter_types(text):
+            filtered = [t for t in master_types if text.lower() in t.lower()]
+            refresh_list(filtered)
+
+
+        # Initially load full list + add playground button
+        refresh_list(master_types)
+
+        # Enable Next button only if a selection is made
+        type_list.itemSelectionChanged.connect(lambda: next_btn.setEnabled(bool(type_list.selectedItems())))
+
+        search_bar.textChanged.connect(filter_types)
+
+        def open_playground_dialog():
+            selected_items = type_list.selectedItems()
+            if not selected_items:
+                return
+            playground_type = selected_items[0].text()
+
+            if playground_type == add_playground_label:
+                new_name, ok = QInputDialog.getText(self, "Add Playground", "Enter new playground name:")
+                if ok and new_name.strip():
+                    new_name = new_name.strip()
+                    if new_name and new_name not in master_types:
+                        master_types.append(f"{new_name} (Added)")  # add new playground to master list
+                        filter_text = search_bar.text()
+                        filter_types(filter_text)
+                    type_list.clearSelection()
+                    next_btn.setEnabled(False)
+                    return
+                else:
+                    return
+
+            select_dialog.accept()
+            self.open_playground_interaction(playground_type)
+
+        next_btn.clicked.connect(open_playground_dialog)
+        cancel_btn.clicked.connect(select_dialog.reject)
+
+        select_dialog.exec_()
+
+    def open_playground_interaction(self, playground_type):
+        from playgrounds import run_playground
+        from PyQt5.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QLabel, QTextEdit, QPushButton
+
+        tips = {
+            "Math Evaluator": "Math: Enter math expressions like 2 + 3 * (7 - 2). Supports sqrt(), sin(), etc.",
+            "Boolean Logic": "Boolean Logic: Use Python boolean expressions with and, or, not.",
+            "Code Formatter (Python)": "Code Formatter: Format your Python code for readability.",
+            "Expression Simplifier": "Expression Simplifier: Simplify mathematical expressions easily.",
+            "Unit Converter": "Unit Converter: Convert units like '10 km to miles', '5 lbs to kg'.",
+            "Regex Tester": "Regex Tester: Enter text (line 1) and regex pattern (line 2) to test matches.",
+            "Code Evaluation": "Code Eval: Enter Python code or expressions to run. Use carefully!",
+            "Text Manipulation": "Text Manipulation: Commands like 'reverse:', 'upper:', or 'lower:' followed by text.",
+            "Date/Time": "Date/Time: Parse dates like 'now', '2025-12-25', or '3 days ago'.",
+            "Currency Conversion": "Currency Conversion: Convert amounts e.g. '100 USD to EUR'.",
+            "Code Linter": "Code Linter: Paste Python code to check syntax and style issues.",
+            "Data Format Converter": "Data Format: Convert data between formats like json, xml, yaml.",
+        }
+
+        tip_text = tips.get(playground_type, "Enter playground input then press 'Run' for output.")
+
+        dialog = QDialog(self)
+        dialog.setWindowTitle(f"{playground_type} Playground")
+        dialog.resize(600, 500)
+
+        layout = QVBoxLayout()
+
+        # Add tip label at the top
+        tip_label = QLabel(tip_text)
+        tip_label.setWordWrap(True)
+        layout.addWidget(tip_label)
+
+        # Input label and box
+        layout.addWidget(QLabel("Input:"))
+        input_box = QTextEdit()
+        layout.addWidget(input_box)
+
+        # Output label and box
+        layout.addWidget(QLabel("Output:"))
+        output_box = QTextEdit()
+        output_box.setReadOnly(True)
+        layout.addWidget(output_box)
+
+        # Buttons layout
+        btn_layout = QHBoxLayout()
+        run_btn = QPushButton("Run")
+        close_btn = QPushButton("Close")
+        btn_layout.addWidget(run_btn)
+        btn_layout.addWidget(close_btn)
+        layout.addLayout(btn_layout)
+
+        dialog.setLayout(layout)
+
+        def run():
+            user_input = input_box.toPlainText()
+            result = run_playground(playground_type, user_input)
+            output_box.setPlainText(result)
+
+        run_btn.clicked.connect(run)
+        close_btn.clicked.connect(dialog.reject)
+
+        dialog.exec_()
+
+    def clipboard_history_button_clicked(self):
+        from PyQt5.QtWidgets import (
+            QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
+            QWidget, QScrollArea, QMessageBox, QCheckBox, QFrame
+        )
+        from PyQt5.QtGui import QClipboard
+        from PyQt5.QtCore import Qt
+
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Clipboard History")
+        dialog.resize(600, 520)
+
+        main_layout = QVBoxLayout(dialog)
+        main_layout.setContentsMargins(10, 10, 10, 10)
+        main_layout.setSpacing(8)
+
+        title_label = QLabel("📋 Clipboard History")
+        title_label.setStyleSheet("font-weight: bold; font-size: 16px; margin-bottom: 10px;")
+        main_layout.addWidget(title_label)
+
+        scroll_area = QScrollArea()
+        scroll_area.setWidgetResizable(True)
+        main_layout.addWidget(scroll_area)
+
+        scroll_content = QWidget()
+        scroll_area.setWidget(scroll_content)
+
+        # THIS is the main vertical layout for the entries:
+        scroll_layout = QVBoxLayout(scroll_content)
+        scroll_layout.setContentsMargins(0, 0, 0, 0)  # No margins
+        scroll_layout.setSpacing(0)                    # No spacing between items
+
+        help_btn = QPushButton("Help")
+        clear_btn = QPushButton("Clear History")
+        delete_btn = QPushButton("Delete Selected")
+
+        btn_layout = QHBoxLayout()
+        btn_layout.addWidget(clear_btn)
+        btn_layout.addWidget(delete_btn)
+        btn_layout.addStretch()
+        btn_layout.addWidget(help_btn)
+        main_layout.addLayout(btn_layout)
+
+        clipboard = QApplication.clipboard()
+        clipboard_history = []
+        last_text = ""
+
+        entry_widgets = []
+
+        def refresh_list():
+            # Remove all existing entries
+            while scroll_layout.count():
+                item = scroll_layout.takeAt(0)
+                widget = item.widget()
+                if widget:
+                    widget.deleteLater()
+
+            entry_widgets.clear()
+
+            for entry in reversed(clipboard_history):
+                checkbox = QCheckBox()
+                checkbox.setFixedSize(20, 20)
+                checkbox.setContentsMargins(0, 0, 0, 0)
+
+                display_text = entry if len(entry) <= 50 else entry[:50] + "..."
+                text_label = QLabel(display_text)
+                text_label.setToolTip(entry)
+                text_label.setWordWrap(False)
+                text_label.setTextInteractionFlags(Qt.TextSelectableByMouse)
+                text_label.setFixedHeight(20)
+                text_label.setContentsMargins(0, 0, 0, 0)
+                text_label.setStyleSheet("padding-left: 5px; margin: 0px;")
+
+                copy_btn = QPushButton("Copy")
+                copy_btn.setFixedSize(50, 20)
+                copy_btn.setContentsMargins(0, 0, 0, 0)
+                copy_btn.setStyleSheet("margin: 0px; padding: 0px;")
+
+                def make_copy_func(text=entry):
+                    def copy_to_clipboard():
+                        clipboard.setText(text)
+                        QMessageBox.information(dialog, "Copied", "Text copied to clipboard.")
+                    return copy_to_clipboard
+
+                copy_btn.clicked.connect(make_copy_func(entry))
+
+                row_layout = QHBoxLayout()
+                row_layout.setContentsMargins(5, 0, 5, 0)  # small horizontal margin
+                row_layout.setSpacing(6)
+                row_layout.addWidget(checkbox)
+                row_layout.addWidget(text_label, stretch=1)
+                row_layout.addWidget(copy_btn)
+
+                row_frame = QFrame()
+                row_frame.setLayout(row_layout)
+                row_frame.setFixedHeight(24)
+                # Use a thin bottom border as separator
+                row_frame.setStyleSheet("""
+                    QFrame {
+                        background-color: #155e6e;
+                        border-bottom: 1px solid #333;
+                        border-radius: 0px;
+                        padding: 0px;
+                        margin: 0px;
+                    }
+                """)
+
+                scroll_layout.insertWidget(0, row_frame)
+                entry_widgets.append((entry, checkbox, row_frame))
+
+
+        def check_clipboard():
+            nonlocal last_text
+            text = clipboard.text()
+            if text and text != last_text:
+                last_text = text
+                if not clipboard_history or clipboard_history[0] != text:
+                    clipboard_history.insert(0, text)
+                    if len(clipboard_history) > 50:
+                        clipboard_history.pop()
+                    refresh_list()
+
+        def clear_history():
+            clipboard_history.clear()
+            refresh_list()
+
+        def delete_selected():
+            selected = [w for e, w, f in entry_widgets if w.isChecked()]
+            if not selected:
+                return
+            for checkbox in selected:
+                for entry, cb, frame in entry_widgets:
+                    if cb == checkbox and entry in clipboard_history:
+                        clipboard_history.remove(entry)
+                        break
+            refresh_list()
+
+        def show_help():
+            QMessageBox.information(
+                dialog,
+                "How to Use Clipboard History",
+                "Copy any text from anywhere (Ctrl+C or right-click > Copy).\n"
+                "Each new copied item appears at the top of this list.\n"
+                "The most recent 50 items are kept temporarily.\n"
+                "This history clears when the app is closed.\n"
+                "Make sure to have the Clipboard History open before copying text."
+            )
+
+        help_btn.clicked.connect(show_help)
+        clear_btn.clicked.connect(clear_history)
+        delete_btn.clicked.connect(delete_selected)
+        clipboard.dataChanged.connect(check_clipboard)
+
+        # Initially refresh to show any existing content (if any)
+        refresh_list()
+
+        dialog.exec_()
+
+
+
 
 full_info = {}
 
