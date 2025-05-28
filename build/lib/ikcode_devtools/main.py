@@ -1,3 +1,5 @@
+import os
+os.environ["QT_LOGGING_RULES"] = "qt.qpa.*=false"
 import sys
 import time
 import textwrap
@@ -5,7 +7,6 @@ import ast
 import inspect
 import subprocess
 import tempfile
-import os
 import traceback
 import inspect as pyinspect
 from collections import defaultdict
@@ -16,8 +17,9 @@ from datetime import datetime
 from PyQt5.QtWidgets import (QMainWindow, QApplication, QPushButton,
                              QLabel, QCheckBox, QRadioButton, QButtonGroup,
                              QLineEdit, QMessageBox, QDialog, 
-                             QVBoxLayout, QTextEdit, QTabWidget, QWidget, QListWidget,
-                             QListWidgetItem, QMessageBox, QHBoxLayout, QSpacerItem, QSizePolicy,
+                             QVBoxLayout, QTextEdit, QTabWidget, QWidget, 
+                             QListWidget, QListWidgetItem, QMessageBox, 
+                             QHBoxLayout, QSpacerItem, QSizePolicy,
                              QFileDialog, QGridLayout, QInputDialog,
                              QScrollArea, QMenu)
 from PyQt5.QtGui import QIcon, QFont, QPixmap
@@ -25,7 +27,8 @@ from PyQt5.QtCore import Qt
 import ikcode_devtools.version as version
 from ikcode_devtools.inspector import inspection_results, getInspect
 from ikcode_devtools.gtest import gTest, generate_test_code
-import warnings
+
+
 
 print(" ")
 print("IKcode Devtools GUI")
@@ -60,7 +63,7 @@ class MainWindow(QMainWindow):
         label.setAlignment(Qt.AlignCenter)
 
         self.rlabel = QLabel("Server preferences:", self)
-        self.rlabel.setGeometry(10, 500, 500, 100)
+        self.rlabel.setGeometry(10, 550, 500, 50)
         self.rlabel.setStyleSheet("color: white; background-color: #1a7689; font-size:20px; font-family: Veranda;")
 
         self.tlabel = QLabel("Connect to your \n IKcode account:", self)
@@ -130,9 +133,10 @@ class MainWindow(QMainWindow):
         top_row = QHBoxLayout()
         top_row.setSpacing(20)
 
-        self.info_button = styled_button("View\nFile Info")
+        self.info_button = QPushButton("View\nFile Info", self)
+        self.info_button.setStyleSheet(button_style)
         self.info_button.clicked.connect(self.view_file_info)
-        top_row.addWidget(self.info_button)
+        self.info_button.setGeometry(30, 150, 160, 50)
 
         self.manage_versions_btn = styled_button("Manage\nSaved Versions")
         self.manage_versions_btn.clicked.connect(self.open_version_manager)
@@ -152,7 +156,7 @@ class MainWindow(QMainWindow):
 
         self.inspect_button = styled_button("Run\nInspection")
         self.inspect_button.clicked.connect(self.inspect_button_clicked)
-        bottom_row.addWidget(self.inspect_button)
+        top_row.addWidget(self.inspect_button)
 
         self.pbutton = styled_button("Playgrounds")
         self.pbutton.clicked.connect(self.playgrounds_button_clicked)
@@ -167,7 +171,11 @@ class MainWindow(QMainWindow):
 
         self.copy_button = styled_button("Clipboard\nHistory (Beta)")
         self.copy_button.clicked.connect(self.clipboard_history_button_clicked)
-        third_row.addWidget(self.copy_button)
+        bottom_row.addWidget(self.copy_button)
+
+        self.regex_button = styled_button("Info Searcher\n(Regex)")
+        self.regex_button.clicked.connect(self.live_regex_tester_clicked)
+        third_row.addWidget(self.regex_button)
 
         # Combine into outer layout
         outer_layout.addLayout(top_row)
@@ -1090,7 +1098,101 @@ class MainWindow(QMainWindow):
 
         dialog.exec_()
 
+    def live_regex_tester_clicked(self):
+        from PyQt5.QtWidgets import (
+            QDialog, QVBoxLayout, QHBoxLayout, QLabel, QComboBox, QLineEdit,
+            QPushButton, QPlainTextEdit, QMessageBox
+        )
+        from PyQt5.QtCore import Qt
+        import re
 
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Info Searcher (Regex)")
+        dialog.resize(600, 500)
+        dialog.setWindowModality(Qt.ApplicationModal)  # Make it modal and focusable
+
+        layout = QVBoxLayout()
+
+        preset_label = QLabel("Select Info type:")
+        preset_dropdown = QComboBox()
+        preset_dropdown.addItems([
+            "Hex Color",
+            "Email",
+            "IPv4 Address",
+            "Date (YYYY-MM-DD)",
+            "Custom..."
+        ])
+
+        regex_input = QLineEdit()
+        regex_input.setPlaceholderText("Enter regex pattern here...")
+        regex_input.hide()
+        regex_input.setFocusPolicy(Qt.StrongFocus)  # Ensure it can accept focus
+        test_input = QPlainTextEdit()
+        test_input.setPlaceholderText("Enter the text you want to search...")
+        test_input.setFocusPolicy(Qt.StrongFocus)
+        test_input.setReadOnly(False)
+        test_input.setEnabled(True)
+
+        result_box = QPlainTextEdit()
+        result_box.setReadOnly(True)
+
+        run_button = QPushButton("Search Info")
+
+        pattern_map = {
+            "Hex Color": r"#(?:[0-9a-fA-F]{3}){1,2}\b",
+            "Email": r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b",
+            "IPv4 Address": r"\b\d{1,3}(?:\.\d{1,3}){3}\b",
+            "Date (YYYY-MM-DD)": r"\b\d{4}-\d{2}-\d{2}\b"
+        }
+
+        def on_preset_changed(index):
+            selected = preset_dropdown.currentText()
+            regex_input.setVisible(selected == "Custom...")
+            if selected == "Custom...":
+                regex_input.setFocus()
+
+        def run_regex_test():
+            selected = preset_dropdown.currentText()
+            text = test_input.toPlainText()
+            pattern = regex_input.text().strip() if selected == "Custom..." else pattern_map.get(selected, "")
+
+            if not pattern:
+                QMessageBox.warning(dialog, "No Pattern", "No regex pattern provided.")
+                return
+
+            try:
+                matches = list(re.finditer(pattern, text))
+                highlighted = text
+                offset = 0
+                for match in matches:
+                    start, end = match.span()
+                    start += offset
+                    end += offset
+                    match_text = highlighted[start:end]
+                    highlight = f"[{match_text}]"
+                    highlighted = highlighted[:start] + highlight + highlighted[end:]
+                    offset += len(highlight) - len(match_text)
+                result_box.setPlainText(highlighted)
+            except re.error as e:
+                QMessageBox.critical(dialog, "Regex Error", str(e))
+
+        preset_dropdown.currentIndexChanged.connect(on_preset_changed)
+        run_button.clicked.connect(run_regex_test)
+
+        layout.addWidget(preset_label)
+        layout.addWidget(preset_dropdown)
+        layout.addWidget(regex_input)
+        layout.addWidget(QLabel("Input Text:"))
+        layout.addWidget(test_input)
+        layout.addWidget(run_button)
+        layout.addWidget(QLabel("Matches (highlighted with brackets):"))
+        layout.addWidget(result_box)
+
+        dialog.setLayout(layout)
+
+        dialog.setFocus()  # Ensure the dialog tries to get focus
+
+        dialog.exec_()
 
 
 full_info = {}
