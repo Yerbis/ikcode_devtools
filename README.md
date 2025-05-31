@@ -5,6 +5,8 @@ IKcode Dvtools is used to connect your Python terminal to IKcode’s database, a
 1. Install and Setup IKcode GTC
 
 ⚠️ It is recommended to create a virtual environment before installing packages.
+
+
 Using VSCode
 
 Follow these steps to create a virtual environment:
