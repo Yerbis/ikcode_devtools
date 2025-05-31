@@ -2,6 +2,7 @@ LICENSE
 README.md
 setup.py
 ikcode_devtools/__init__.py
+ikcode_devtools/auto_reformatter.py
 ikcode_devtools/gtest.py
 ikcode_devtools/ikcode.png
 ikcode_devtools/inspector.py

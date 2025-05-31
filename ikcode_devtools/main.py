@@ -25,8 +25,7 @@ from PyQt5.QtWidgets import (QMainWindow, QApplication, QPushButton,
 from PyQt5.QtGui import QIcon, QFont, QPixmap
 from PyQt5.QtCore import Qt
 import ikcode_devtools.version as version
-from ikcode_devtools.inspector import inspection_results, getInspect
-from ikcode_devtools.gtest import gTest, generate_test_code
+from ikcode_devtools.auto_reformatter import reFormat
 
 
 
@@ -42,7 +41,7 @@ image_path = os.path.join(current_dir, "ikcode.png")
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle(f"IKcode Devtools GUI -- v{version.__version__}")
+        self.setWindowTitle(f"IKcode Devtools GUI (Python) -- v{version.__version__}")
         self.setGeometry(100, 100, 800, 800)
         self.setWindowIcon(QIcon(image_path))
         self.setStyleSheet("background-color: #1a7689;")
@@ -56,7 +55,7 @@ class MainWindow(QMainWindow):
 
         self.button_group = QButtonGroup(self)
 
-        label = QLabel("IKcode Devtools GUI", self)
+        label = QLabel("IKcode Devtools GUI for Python", self)
         label.setFont(QFont("Veranda", 18, QFont.Bold))
         label.setGeometry(0, 0, 500, 100)
         label.setStyleSheet("color: white; background-color: #1a7689; border: 2px solid #ffcc00;")
@@ -176,6 +175,10 @@ class MainWindow(QMainWindow):
         self.regex_button = styled_button("Info Searcher\n(Regex)")
         self.regex_button.clicked.connect(self.live_regex_tester_clicked)
         third_row.addWidget(self.regex_button)
+
+        self.reform_button = styled_button("Auto\nReformatter")
+        self.reform_button.clicked.connect(self.auto_reformatter_clicked)
+        third_row.addWidget(self.reform_button)       
 
         # Combine into outer layout
         outer_layout.addLayout(top_row)
@@ -1136,7 +1139,7 @@ class MainWindow(QMainWindow):
         result_box = QPlainTextEdit()
         result_box.setReadOnly(True)
 
-        run_button = QPushButton("Search Info")
+        run_button = QPushButton("Search")
 
         pattern_map = {
             "Hex Color": r"#(?:[0-9a-fA-F]{3}){1,2}\b",
@@ -1193,6 +1196,71 @@ class MainWindow(QMainWindow):
         dialog.setFocus()  # Ensure the dialog tries to get focus
 
         dialog.exec_()
+
+    def auto_reformatter_clicked(self):
+        from PyQt5.QtWidgets import (
+            QDialog, QVBoxLayout, QLabel, QPushButton, QPlainTextEdit, QComboBox, QMessageBox
+        )
+        from PyQt5.QtCore import Qt
+        from PyQt5.QtGui import QFont
+        from PyQt5.QtWidgets import QApplication
+        from ikcode_devtools.auto_reformatter import get_decorated_functions, reformat_code
+
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Auto Reformatter")
+        dialog.resize(700, 600)
+        layout = QVBoxLayout()
+
+        label = QLabel("Choose any decorated code or put in your own:")
+        label.setFont(QFont("Verdana", 12))
+        layout.addWidget(label)
+
+        decorated_dropdown = QComboBox()
+        decorated_dropdown.addItem("Enter custom code...")
+        decorated_functions = get_decorated_functions()
+        for func_name in decorated_functions:
+            decorated_dropdown.addItem(func_name)
+        layout.addWidget(decorated_dropdown)
+
+        code_input = QPlainTextEdit()
+        code_input.setPlaceholderText("Paste or type your code here...")
+        layout.addWidget(code_input)
+
+        self.result_output = QPlainTextEdit()  # <== Make this an instance variable
+        self.result_output.setReadOnly(True)
+        layout.addWidget(QLabel("Formatted Output:"))
+        layout.addWidget(self.result_output)
+
+        format_button = QPushButton("Format Code")
+        layout.addWidget(format_button)
+
+        copy_button = QPushButton("Copy")
+        layout.addWidget(copy_button)
+
+        def on_dropdown_change(index):
+            if index == 0:
+                code_input.setPlainText("")
+            else:
+                selected_func = decorated_dropdown.currentText()
+                code_input.setPlainText(decorated_functions.get(selected_func, ""))
+
+        def format_code():
+            code = code_input.toPlainText()
+            formatted = reformat_code(code)
+            self.result_output.setPlainText(formatted)
+
+        def copy_output_to_clipboard():
+            QApplication.clipboard().setText(self.result_output.toPlainText())
+
+        decorated_dropdown.currentIndexChanged.connect(on_dropdown_change)
+        format_button.clicked.connect(format_code)
+        copy_button.clicked.connect(copy_output_to_clipboard)
+
+        dialog.setLayout(layout)
+        dialog.exec_()
+
+
+
 
 
 full_info = {}
@@ -1253,9 +1321,6 @@ class CodeAnalyzer(ast.NodeVisitor):
         if isinstance(node.value, ast.Constant) and isinstance(node.value.value, str):
             self.comments.append(node.value.value)
         self.generic_visit(node)
-
-
-
 
 class CheckInfo:
     def __init__(self, func):
@@ -1473,7 +1538,40 @@ Notes:
     - The generated code is editable and meant as a starting point for real tests.
 
 """
+    reformat_help = """
+reFormat - Auto Code Formatter Help
 
+Purpose:
+    The @reFormat decorator lets you register specific functions for
+    auto-formatting using Black-style rules. These functions will appear in
+    the Auto Reformatter tool GUI, allowing quick formatting without pasting code manually.
+
+Usage:
+
+    from ikcode_devtools.auto_reformatter import reFormat
+
+    @reFormat
+    def messy_code():
+        x=1
+        for i in range( 0, 5 ):
+            print( x+i )
+
+    # When you launch the GUI:
+    from ikcode_devtools import runGUI
+    runGUI()
+
+    In the GUI:
+      1. Click "Auto Reformatter".
+      2. Choose your decorated function from the dropdown menu.
+      3. Click "Format Code" to auto-format and view the clean output.
+      4. Click "Copy" to copy the result to your clipboard.
+
+Notes:
+    - Functions must be called at least once after decoration to be registered.
+    - If the function source can't be extracted, it won’t appear in the list.
+    - "Enter custom code..." allows you to format arbitrary Python code manually.
+
+"""
 
     # Dispatcher logic
     if topic is None:
@@ -1495,6 +1593,8 @@ Notes:
             print(setversion_help)
         elif topic.__name__ == "gTest":
             print(gtest_help)
+        elif topic.__name__ == "reFormat":
+            print(reformat_help)
         else:
             print("Unrecognized help topic. Try Help(), Help(CheckInfo), Help(runGUI), Help('inspection_data'), or Help(setVersion).")
     else:

@@ -13,6 +13,7 @@ setup(
         'pyqt5',
         'sympy',
         'pyyaml',
+        'black',
     ],
     entry_points={
         'console_scripts': [

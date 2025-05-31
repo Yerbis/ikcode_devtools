@@ -1,6 +1,6 @@
 Metadata-Version: 2.4
 Name: ikcode-devtools
-Version: 2.1.5
+Version: 2.2.0
 Summary: IKcode Devtools is a collection of tools for developers, including a code formatter, linter, and more.
 Author: IKcode
 Author-email: ikcode.offical@gmail.com
@@ -13,6 +13,7 @@ License-File: LICENSE
 Requires-Dist: pyqt5
 Requires-Dist: sympy
 Requires-Dist: pyyaml
+Requires-Dist: black
 Dynamic: author
 Dynamic: author-email
 Dynamic: classifier
