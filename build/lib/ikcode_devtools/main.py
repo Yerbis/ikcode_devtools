@@ -27,8 +27,6 @@ from PyQt5.QtCore import Qt
 import ikcode_devtools.version as version
 from ikcode_devtools.auto_reformatter import reFormat
 
-
-
 print(" ")
 print("IKcode Devtools GUI")
 print(" ")
@@ -480,57 +478,61 @@ class MainWindow(QMainWindow):
         # Show info in message box
         QMessageBox.information(self, "File Info", info_text)
 
+    def scan_checkinfo_decorated_files(self):
+        base_path = os.path.dirname(os.path.abspath(sys.argv[0]))
+        all_info = {}
+
+        for root, _, files in os.walk(base_path):
+            for file in files:
+                if not file.endswith(".py"):
+                    continue
+
+                filepath = os.path.join(root, file)
+                try:
+                    with open(filepath, "r", encoding="utf-8") as f:
+                        source = f.read()
+                    tree = ast.parse(source, filename=filepath)
+                except Exception as e:
+                    print(f"[CheckInfo Scan] Skipping {filepath}: {e}")
+                    continue
+
+                for node in tree.body:
+                    if isinstance(node, ast.FunctionDef):
+                        if not any(isinstance(d, ast.Name) and d.id == "CheckInfo" for d in node.decorator_list):
+                            continue
+
+                        analyzer = CodeAnalyzer()
+                        analyzer.visit(node)
+                        all_info[node.name] = {
+                            "Function Names": analyzer.function_names,
+                            "Variable Names": analyzer.variable_names,
+                            "Imports": analyzer.imports,
+                            "Classes": analyzer.classes,
+                            "Loops": analyzer.loops,
+                            "Conditionals": analyzer.conditionals,
+                            "Comments": analyzer.comments
+                        }
+        return all_info
+
+
     def view_check_info(self):
-    # Check if GUI enabled and terminal connected
         gui_enabled = self.button.text() == "Disable GUI"
         terminal_connected = self.checkbox.isChecked()
         if not (gui_enabled and terminal_connected):
             QMessageBox.warning(self, "Error", "GUI must be enabled and terminal connected to view check info.")
             return
 
-        # Get current running file path
-        try:
-            filename = os.path.abspath(sys.argv[0])
-            with open(filename, "r", encoding="utf-8") as f:
-                code = f.read()
-        except Exception as e:
-            QMessageBox.critical(self, "Error", f"Failed to read file:\n{e}")
-            return
+        # Replace old single file scan with scanning all files
+        all_info = self.scan_checkinfo_decorated_files()
 
-        try:
-            tree = ast.parse(code)
-        except Exception as e:
-            QMessageBox.critical(self, "Error", f"Failed to parse file:\n{e}")
-            return
-
-        all_info = {}
-
-        for node in tree.body:
-            if isinstance(node, ast.FunctionDef):
-                # Look for @CheckInfo decorator
-                if not any(isinstance(d, Name) and d.id == "CheckInfo" for d in node.decorator_list):
-                    continue  # skip non-decorated functions
-
-                analyzer = CodeAnalyzer()
-                analyzer.visit(node)
-                all_info[node.name] = {
-                    "Function Names": analyzer.function_names,
-                    "Variable Names": analyzer.variable_names,
-                    "Imports": analyzer.imports,
-                    "Classes": analyzer.classes,
-                    "Loops": analyzer.loops,
-                    "Conditionals": analyzer.conditionals,
-                    "Comments": analyzer.comments
-                }
-
-        # Format output for CheckInfo only, skipping trivial functions
         output = ""
         for func_name, info in all_info.items():
             only_self_function = info["Function Names"] == [func_name]
             other_keys_empty = all(not info[key] for key in ["Classes", "Imports", "Loops", "Conditionals", "Comments"])
 
-            if only_self_function and other_keys_empty:
-                continue
+            # You can enable or disable this filter as you like
+            # if only_self_function and other_keys_empty:
+            #     continue
 
             output += f"Function: {func_name}\n"
             for key, values in info.items():
@@ -539,24 +541,102 @@ class MainWindow(QMainWindow):
             output += "\n"
 
         if not output:
-            output = "No detailed CheckInfo data found for any function."
+            output = "No detailed CheckInfo data found for any function.\nTIP! Make sure you call the function!"
 
-        # Show info in message box (only CheckInfo data)
         QMessageBox.information(self, "CheckInfo", output)
 
-    def inspect_button_clicked(self):
+    def scan_getinspect_decorated_files(self):
+        import os, ast, inspect
+        from collections import defaultdict
+        from ikcode_devtools.inspector import inspection_results  # shared registry
 
+        base_path = os.path.dirname(os.path.abspath(sys.argv[0]))
+
+        for root, _, files in os.walk(base_path):
+            for file in files:
+                if not file.endswith(".py"):
+                    continue
+
+                filepath = os.path.join(root, file)
+                try:
+                    with open(filepath, "r", encoding="utf-8") as f:
+                        source = f.read()
+                    tree = ast.parse(source, filename=filepath)
+                except Exception as e:
+                    print(f"[Inspect Scan] Skipping {filepath}: {e}")
+                    continue
+
+                for node in tree.body:
+                    if isinstance(node, ast.FunctionDef):
+                        if not any(isinstance(d, ast.Name) and d.id == "getInspect" for d in node.decorator_list):
+                            continue
+
+                        result_data = defaultdict(str)
+                        lines = source.splitlines()[node.lineno - 1:node.end_lineno] if hasattr(node, 'end_lineno') else source.splitlines()
+                        total_lines = len(lines)
+                        comment_lines = sum(1 for line in lines if line.strip().startswith("#"))
+                        blank_lines = sum(1 for line in lines if line.strip() == "")
+                        result_data["Total Lines"] = total_lines
+                        result_data["Comment Lines"] = comment_lines
+                        result_data["Blank Lines"] = blank_lines
+                        result_data["Comment Ratio"] = f"{(comment_lines / total_lines):.2%}" if total_lines > 0 else "0%"
+
+                        # Duplicate lines
+                        duplicates = [line for line in lines if lines.count(line) > 1 and line.strip()]
+                        result_data["Duplicate Lines"] = len(set(duplicates))
+
+                        # AST-based metrics
+                        class VarCounter(ast.NodeVisitor):
+                            def __init__(self): self.vars = set()
+                            def visit_Name(self, node):
+                                if isinstance(node.ctx, ast.Store):
+                                    self.vars.add(node.id)
+                        vc = VarCounter(); vc.visit(node)
+                        result_data["Variable Count"] = len(vc.vars)
+
+                        class DepthCounter(ast.NodeVisitor):
+                            def __init__(self): self.max_depth = 0; self.current_depth = 0
+                            def generic_visit(self, node):
+                                if isinstance(node, (ast.If, ast.For, ast.While, ast.With, ast.FunctionDef)):
+                                    self.current_depth += 1
+                                    self.max_depth = max(self.max_depth, self.current_depth)
+                                    super().generic_visit(node)
+                                    self.current_depth -= 1
+                                else:
+                                    super().generic_visit(node)
+                        dc = DepthCounter(); dc.visit(node)
+                        result_data["Max Nesting Depth"] = dc.max_depth
+
+                        class ComplexityCounter(ast.NodeVisitor):
+                            def __init__(self): self.complexity = 1
+                            def visit_If(self, node): self.complexity += 1; self.generic_visit(node)
+                            def visit_For(self, node): self.complexity += 1; self.generic_visit(node)
+                            def visit_While(self, node): self.complexity += 1; self.generic_visit(node)
+                            def visit_Try(self, node): self.complexity += 1; self.generic_visit(node)
+                            def visit_BoolOp(self, node): self.complexity += len(node.values) - 1; self.generic_visit(node)
+                        cc = ComplexityCounter(); cc.visit(node)
+                        result_data["Complexity"] = cc.complexity
+
+                        result_data["Exception"] = "Not run yet"
+                        result_data["Warnings"] = "Not run yet"
+                        result_data["Execution Time"] = "Not run yet"
+                        result_data["Unused Imports"] = "Not analyzed"
+
+                        inspection_results[node.name] = dict(result_data)
+
+    def inspect_button_clicked(self):
         gui_enabled = self.button.text() == "Disable GUI"
         terminal_connected = self.checkbox.isChecked()
         if not (gui_enabled and terminal_connected):
             QMessageBox.warning(self, "Error", "GUI must be enabled and terminal connected to run an inspection")
             return
-               
+
         from ikcode_devtools import inspector
         inspection_data = inspector.inspection_results
 
-        if self.log:
-            print("INSPECTION RESULTS:", inspection_data)  # Debug print
+        if not inspection_data:
+            self.scan_getinspect_decorated_files()
+            inspection_data = inspector.inspection_results  # Refresh after static scan
 
         if not inspection_data:
             QMessageBox.information(self, "No Data", "No inspection data found.")
@@ -1197,7 +1277,8 @@ class MainWindow(QMainWindow):
 
         dialog.exec_()
 
-    def auto_reformatter_clicked(self):
+    def auto_reformatter_clicked(self):  
+        
         from PyQt5.QtWidgets import (
             QDialog, QVBoxLayout, QLabel, QPushButton, QPlainTextEdit, QComboBox, QMessageBox
         )
@@ -1205,7 +1286,11 @@ class MainWindow(QMainWindow):
         from PyQt5.QtGui import QFont
         from PyQt5.QtWidgets import QApplication
         from ikcode_devtools.auto_reformatter import get_decorated_functions, reformat_code
-
+        gui_enabled = self.button.text() == "Disable GUI"
+        terminal_connected = self.checkbox.isChecked()
+        if not (gui_enabled and terminal_connected):
+            QMessageBox.warning(self, "Error", "GUI must be enabled and terminal connected to use the auto reformatter.")
+            return
         dialog = QDialog(self)
         dialog.setWindowTitle("Auto Reformatter")
         dialog.resize(700, 600)
@@ -1224,6 +1309,7 @@ class MainWindow(QMainWindow):
 
         code_input = QPlainTextEdit()
         code_input.setPlaceholderText("Paste or type your code here...")
+        code_input.setReadOnly(False)
         layout.addWidget(code_input)
 
         self.result_output = QPlainTextEdit()  # <== Make this an instance variable
@@ -1265,6 +1351,11 @@ class MainWindow(QMainWindow):
 
 full_info = {}
 
+_checkinfo_registry = {}
+
+def get_checkinfo_functions():
+    return _checkinfo_registry.copy()
+
 class CodeAnalyzer(ast.NodeVisitor):
     def __init__(self):
         self.function_names = []
@@ -1274,15 +1365,12 @@ class CodeAnalyzer(ast.NodeVisitor):
         self.loops = []
         self.conditionals = []
         self.comments = []
-        self.visited_main_func = False  # to avoid nested functions
 
     def visit_FunctionDef(self, node):
-        if not self.visited_main_func:
-            self.function_names.append(node.name)
-            self.visited_main_func = True
-            for child in node.body:
-                if not isinstance(child, (ast.FunctionDef, ast.ClassDef)):
-                    self.visit(child)
+        self.function_names.append(node.name)
+        for child in node.body:
+            if not isinstance(child, (ast.FunctionDef, ast.ClassDef)):
+                self.visit(child)
 
     def visit_Assign(self, node):
         for target in node.targets:
@@ -1303,7 +1391,6 @@ class CodeAnalyzer(ast.NodeVisitor):
 
     def visit_ClassDef(self, node):
         self.classes.append(node.name)
-        # Don't descend into class body
 
     def visit_For(self, node):
         self.loops.append('for')
@@ -1327,9 +1414,20 @@ class CheckInfo:
         self.func = func
         self.full_info = {}
         self._analyze_code()
+        #print(f"[DEBUG] CheckInfo initialized for {func.__name__}")
 
-        # Attach self to the function object for easy access
+        # Attach inspector to function
         setattr(self.func, "_checkinfo_instance", self)
+        
+        # Store source for registry
+        try:
+            source = inspect.getsource(func)
+            #print(f"[DEBUG] Got source for {func.__name__}")
+            _checkinfo_registry[func.__name__] = source
+            #print(f"[DEBUG] Adding {func.__name__} to _checkinfo_registry")
+            #print(f"[DEBUG] Source:\n{source}")
+        except Exception as e:
+            print(f"[CheckInfo] Could not get source for {func.__name__}: {e}")
 
     def __call__(self, *args, **kwargs):
         return self.func(*args, **kwargs)
@@ -1337,7 +1435,7 @@ class CheckInfo:
     def _analyze_code(self):
         try:
             source = inspect.getsource(self.func)
-            source = textwrap.dedent(source)  # ← This is necessary
+            source = textwrap.dedent(source)
             tree = ast.parse(source)
 
             analyzer = CodeAnalyzer()
@@ -1356,13 +1454,17 @@ class CheckInfo:
                 "Comments": analyzer.comments
             }
         except Exception as e:
-            print("Error during code analysis:", e)
+            print("[CheckInfo] Error during code analysis:", e)
             self.full_info = {}
-
 
     def get_info(self):
         return self.full_info
 
+print("[DEBUG] Final registry:", get_checkinfo_functions())
+
+
+
+print(get_checkinfo_functions())
 
 def Help(topic=None):
     general_help = """
